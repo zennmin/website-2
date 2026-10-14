@@ -91,6 +91,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 button.block, .btn.block{ width:100%; }
 button.ghost, .btn.ghost{ background: transparent; color: var(--ink); }
 button.ghost:hover, .btn.ghost:hover{ background: rgba(22,35,62,0.05); }
+button.btn-sm, .btn.btn-sm{ padding: 5px 12px; font-size: 12px; border-radius: 6px; }
 
 .switch-line{ text-align:center; margin-top:18px; font-size: 13px; color: var(--ink-soft); }
 .switch-line a{ color: var(--brass); font-weight:600; text-decoration:none; }
@@ -152,8 +153,10 @@ button.ghost .spinner{ border-color: rgba(22,35,62,0.25); border-top-color: var(
 .img-row{
   display:flex; align-items:center; justify-content:space-between;
   padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; font-size: 13px;
+  gap: 12px;
 }
-.img-row .name{ font-weight:500; }
+.img-row .info{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.img-row .name{ font-weight:500; word-break:break-all; }
 .img-row .meta{ color: var(--ink-soft); font-size:12px; }
 .empty-state{ color: var(--ink-soft); font-size:13px; padding: 14px 0 2px; text-align:center; }
 
