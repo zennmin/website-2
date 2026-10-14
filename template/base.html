@@ -1,1 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}SecureImage{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="topbar">
+    <a href="{{ '/' if session.get('email') else url_for('login') }}" class="brand">
+      <span class="mark"></span> SecureImage
+    </a>
+    <nav>
+      {% if session.get('email') %}
+        <span class="pill">{{ session['email'] }}</span>
+        <a href="{{ url_for('decrypt_page') }}">Decrypt a key</a>
+        <a href="{{ url_for('logout') }}">Log out</a>
+      {% else %}
+        <a href="{{ url_for('decrypt_page') }}">Decrypt a key</a>
+        <a href="{{ url_for('login') }}">Log in</a>
+      {% endif %}
+    </nav>
+  </div>
+  {% block content %}{% endblock %}
+</body>
+</html>
 
