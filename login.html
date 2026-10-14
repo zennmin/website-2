@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Log in — The Vault{% endblock %}
+{% block content %}
+<div class="wrap">
+  <div class="auth-card">
+    <h1>Log in</h1>
+    <p class="sub">Log in to encrypt and manage your own images.</p>
+
+    <form id="loginForm">
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" placeholder="you@example.com" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="Your password" required>
+      </div>
+      <button type="submit" class="block" id="btnLogin">Log in</button>
+      <div class="status" id="loginStatus"></div>
+    </form>
+
+    <div class="switch-line">New here? <a href="{{ url_for('signup') }}">Create an account</a></div>
+  </div>
+
+  <p class="switch-line" style="margin-top:24px;">
+    Just need to open a shared image? <a href="{{ url_for('decrypt_page') }}">Decrypt a key</a> — no account needed.
+  </p>
+</div>
+
+<script>
+const form = document.getElementById('loginForm');
+const btn = document.getElementById('btnLogin');
+const statusEl = document.getElementById('loginStatus');
+
+function setStatus(ok, msg){
+  statusEl.className = 'status show ' + (ok ? 'ok' : 'err');
+  statusEl.innerHTML = `<span class="dot"></span><span>${msg}</span>`;
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Logging in…';
+
+  const formData = new FormData(form);
+  try {
+    const res = await fetch('/login', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (res.ok) {
+      setStatus(true, 'Welcome back — redirecting…');
+      window.location.href = data.redirect;
+    } else {
+      setStatus(false, data.error || 'Something went wrong.');
+      btn.disabled = false; btn.innerHTML = 'Log in';
+    }
+  } catch (err) {
+    setStatus(false, 'Could not reach the server.');
+    btn.disabled = false; btn.innerHTML = 'Log in';
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — The Vault{% endblock %}
+{% block content %}
+<div class="wrap wide">
+
+  <div class="panel">
+    <h2>Encrypt an image</h2>
+    <p class="hint">A fresh AES-256 key is generated for this image and locked away with the server's RSA key. You'll get a one-time share key — that's what unlocks it, and it's the only copy.</p>
+
+    <div class="dropzone" id="dropzone" onclick="document.getElementById('imageInput').click()">
+      <img id="thumbPreview" class="thumb" style="display:none">
+      <span id="dropzoneText">Drop an image here, or click to choose one</span>
+      <input type="file" id="imageInput" accept="image/*" style="display:none">
+    </div>
+    <button onclick="encryptImage()" id="btnEncrypt">Encrypt &amp; store</button>
+    <div class="status" id="encryptStatus"></div>
+
+    <div class="key-reveal" id="keyReveal" style="display:none;">
+      <div class="label">Share this key with the recipient — shown only once</div>
+      <div class="keybox">
+        <span id="keyText"></span>
+        <button class="copy-btn" onclick="copyKey()">Copy</button>
+      </div>
+      <div class="note">Anyone with this key can open the image at <code>/decrypt</code> — on any browser, any device, no account required. Losing it means the image can't be recovered.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Your images</h2>
+    <p class="hint">Encrypted at rest — this list never shows a share key again after it's created.</p>
+    <div class="images-grid" id="imagesGrid">
+      {% if images %}
+        {% for img in images %}
+          <div class="img-row">
+            <span class="name">{{ img.filename }}</span>
+            <span class="meta">ID: {{ img.image_id }} &nbsp;·&nbsp; {{ img.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">Nothing encrypted yet — upload an image above to get started.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <footer class="page-footer">Signed in as {{ user.email }} &nbsp;·&nbsp; {{ user.profession }}</footer>
+</div>
+
+<script>
+let selectedFile = null;
+const dropzone = document.getElementById('dropzone');
+const imageInput = document.getElementById('imageInput');
+
+imageInput.addEventListener('change', e => handleFile(e.target.files[0]));
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  handleFile(e.dataTransfer.files[0]);
+});
+
+function handleFile(file){
+  if (!file) return;
+  selectedFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const thumb = document.getElementById('thumbPreview');
+    thumb.src = e.target.result;
+    thumb.style.display = 'block';
+    document.getElementById('dropzoneText').textContent = file.name;
+  };
+  reader.readAsDataURL(file);
+}
+
+function setStatus(id, ok, msg){
+  const el = document.getElementById(id);
+  el.className = 'status show ' + (ok ? 'ok' : 'err');
+  el.innerHTML = `<span class="dot"></span><span>${msg}</span>`;
+}
+
+async function encryptImage(){
+  if (!selectedFile){ setStatus('encryptStatus', false, 'Choose an image first.'); return; }
+
+  const btn = document.getElementById('btnEncrypt');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Encrypting…';
+
+  const formData = new FormData();
+  formData.append('image', selectedFile);
+
+  try {
+    const res = await fetch('/encrypt', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (res.ok) {
+      setStatus('encryptStatus', true, `<strong>${data.filename}</strong> encrypted and stored.`);
+      document.getElementById('keyText').textContent = data.share_key;
+      document.getElementById('keyReveal').style.display = 'block';
+
+      const grid = document.getElementById('imagesGrid');
+      const empty = grid.querySelector('.empty-state');
+      if (empty) empty.remove();
+      const row = document.createElement('div');
+      row.className = 'img-row';
+      row.innerHTML = `<span class="name">${data.filename}</span><span class="meta">ID: ${data.image_id} · just now</span>`;
+      grid.prepend(row);
+    } else {
+      setStatus('encryptStatus', false, data.error || 'Encryption failed.');
+    }
+  } catch (err) {
+    setStatus('encryptStatus', false, 'Could not reach the server.');
+  }
+  btn.disabled = false;
+  btn.innerHTML = 'Encrypt &amp; store';
+}
+
+function copyKey(){
+  const text = document.getElementById('keyText').textContent;
+  navigator.clipboard.writeText(text);
+  const btn = event.target;
+  const original = btn.textContent;
+  btn.textContent = 'Copied';
+  setTimeout(() => btn.textContent = original, 1400);
+}
+</script>
+{% endblock %}
