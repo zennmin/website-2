@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Create an account — SecureImage{% endblock %}
+{% block content %}
+<div class="wrap">
+  <div class="auth-card">
+    <h1>Create an account</h1>
+    <p class="sub">You'll need this to encrypt and store images. Decrypting later never requires an account — that part works for anyone, anywhere.</p>
+
+    <form id="signupForm">
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" placeholder="you@example.com" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="At least 8 characters" required minlength="8">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="dob">Date of birth</label>
+          <input type="date" id="dob" name="dob" required>
+        </div>
+        <div class="field">
+          <label for="profession">Profession</label>
+          <select id="profession" name="profession" required>
+            <option value="" disabled selected>Choose one</option>
+            {% for p in professions %}
+              <option value="{{ p }}">{{ p }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="block" id="btnSignup">Create account</button>
+      <div class="status" id="signupStatus"></div>
+    </form>
+
+    <div class="switch-line">Already have an account? <a href="{{ url_for('login') }}">Log in</a></div>
+  </div>
+</div>
+
+<script>
+const form = document.getElementById('signupForm');
+const btn = document.getElementById('btnSignup');
+const statusEl = document.getElementById('signupStatus');
+
+function setStatus(ok, msg){
+  statusEl.className = 'status show ' + (ok ? 'ok' : 'err');
+  statusEl.innerHTML = `<span class="dot"></span><span>${msg}</span>`;
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Creating…';
+
+  const formData = new FormData(form);
+  try {
+    const res = await fetch('/signup', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (res.ok) {
+      setStatus(true, 'Account created — redirecting…');
+      window.location.href = data.redirect;
+    } else {
+      setStatus(false, data.error || 'Something went wrong.');
+      btn.disabled = false; btn.innerHTML = 'Create account';
+    }
+  } catch (err) {
+    setStatus(false, 'Could not reach the server.');
+    btn.disabled = false; btn.innerHTML = 'Create account';
+  }
+});
+</script>
+{% endblock %}

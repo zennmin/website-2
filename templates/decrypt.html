@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Decrypt — SecureImage{% endblock %}
+{% block content %}
+<div class="wrap">
+  <div class="decrypt-hero">
+    <div class="mark-lg"></div>
+    <h1>Unlock an image</h1>
+    <p>Paste the key you were sent. It works here, on any browser or device — no account needed.</p>
+  </div>
+
+  <div class="auth-card">
+    <input type="text" class="key-input" id="shareKeyInput" placeholder="e.g. a1b2c3d4.Kx9mQ2pLz7Rt4Ywb" autocomplete="off" value="{{ prefill_key or '' }}">
+    <button class="block" style="margin-top:14px;" onclick="unlock()" id="btnUnlock">Unlock</button>
+    <div class="status" id="decryptStatus"></div>
+
+    <div class="preview-frame">
+      <img id="preview" alt="Decrypted image">
+      <div class="unlock-note" id="unlockNote">
+        <span>&#128274;&#65039;&rarr;&#128275;&#65039;</span> <span id="integrityText">Integrity verified — bytes match the original</span>
+      </div>
+      <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-top:12px;">
+        <a class="btn ghost download-link" id="downloadLink" download>Download image</a>
+        <a class="btn ghost download-link" id="directDownloadLink">Direct download</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function unlock(){
+  const input = document.getElementById('shareKeyInput');
+  const shareKey = input.value.trim();
+  const preview = document.getElementById('preview');
+  const note = document.getElementById('unlockNote');
+  const downloadLink = document.getElementById('downloadLink');
+  const directDownloadLink = document.getElementById('directDownloadLink');
+  const btn = document.getElementById('btnUnlock');
+
+  preview.style.display = 'none';
+  note.style.display = 'none';
+  downloadLink.style.display = 'none';
+  if (directDownloadLink) directDownloadLink.style.display = 'none';
+
+  if (!shareKey){ setStatus(false, 'Paste a key first.'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Unlocking…';
+
+  try {
+    const formData = new FormData();
+    formData.append('share_key', shareKey);
+    const res = await fetch('/decrypt', { method: 'POST', body: formData });
+
+    if (!res.ok) {
+      const err = await res.json();
+      setStatus(false, err.error || 'Could not unlock this image.');
+    } else {
+      const filename = res.headers.get('X-Filename') || 'decrypted_image.png';
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      preview.src = url;
+      preview.style.display = 'block';
+      note.style.display = 'flex';
+      document.getElementById('integrityText').textContent =
+        res.headers.get('X-Integrity') === 'mismatch'
+          ? 'Warning — decrypted bytes do not match the stored fingerprint'
+          : 'Integrity verified — bytes match the original';
+      downloadLink.href = url;
+      downloadLink.download = filename;
+      downloadLink.style.display = 'inline-flex';
+      if (directDownloadLink) {
+        directDownloadLink.href = `/download/share/${encodeURIComponent(shareKey)}`;
+        directDownloadLink.download = filename;
+        directDownloadLink.style.display = 'inline-flex';
+      }
+      setStatus(true, 'Unlocked successfully.');
+    }
+  } catch (err) {
+    setStatus(false, 'Could not reach the server.');
+  }
+  btn.disabled = false;
+  btn.innerHTML = 'Unlock';
+}
+
+function setStatus(ok, msg){
+  const el = document.getElementById('decryptStatus');
+  el.className = 'status show ' + (ok ? 'ok' : 'err');
+  el.innerHTML = `<span class="dot"></span><span>${msg}</span>`;
+}
+
+document.getElementById('shareKeyInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') unlock();
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (document.getElementById('shareKeyInput').value.trim()) {
+    unlock();
+  }
+});
+</script>
+{% endblock %}

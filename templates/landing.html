@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}SecureImage — Encrypt an image, share it with a key{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='landing.css') }}">{% endblock %}
+{% block content %}
+<div class="land">
+
+  <section class="hero">
+    <div class="eyebrow">AES-256 · RSA · key-based sharing</div>
+    <h1>Lock an image. Share one key.</h1>
+    <p class="lead">Encrypt a picture and get a single key you can send to anyone. They paste it into the unlock page — any browser, any device, no account needed.</p>
+
+    <div class="hero-actions">
+      {% if session.get('email') %}
+        <a class="btn" href="{{ url_for('dashboard') }}">Open dashboard</a>
+      {% else %}
+        <a class="btn" href="{{ url_for('signup') }}">Create an account</a>
+        <a class="btn ghost" href="{{ url_for('login') }}">Log in</a>
+      {% endif %}
+    </div>
+
+    <form class="quick-unlock" action="{{ url_for('decrypt_page') }}" method="get">
+      <input type="text" name="key" placeholder="Got a key? e.g. a1b2c3d4.Kx9mQ2pLz7Rt4Ywb" autocomplete="off" aria-label="Share key" required>
+      <button type="submit">Unlock</button>
+    </form>
+    <div class="quick-hint">Opening an image never requires an account.</div>
+  </section>
+
+  <h2 class="section-title">Try the encryption yourself</h2>
+  <p class="section-sub">This demo runs entirely in your browser using the same cipher (AES-256-GCM). Nothing is uploaded.</p>
+
+  <div class="demo" id="demo">
+    <div class="demo-src">
+      <canvas id="srcCanvas" width="96" height="96" aria-label="Original image"></canvas>
+      <div class="meta">
+        <strong id="srcName">Sample image</strong><br>
+        <span id="srcSize">—</span><br>
+        <button class="ghost btn-sm" type="button" id="btnPick" style="margin-top:8px;">Use my own image</button>
+        <input type="file" id="demoFile" accept="image/*" style="display:none">
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step" id="s1">
+        <div class="step-head">
+          <div class="t"><span class="n">1</span> Generate a fresh key</div>
+          <button type="button" class="btn-sm" id="b1">Generate</button>
+        </div>
+        <div class="step-out" id="o1"></div>
+      </div>
+
+      <div class="step locked" id="s2">
+        <div class="step-head">
+          <div class="t"><span class="n">2</span> Encrypt the image</div>
+          <button type="button" class="btn-sm" id="b2" disabled>Encrypt</button>
+        </div>
+        <div class="step-out" id="o2"></div>
+      </div>
+
+      <div class="step locked" id="s3">
+        <div class="step-head">
+          <div class="t"><span class="n">3</span> Decrypt with the key</div>
+          <button type="button" class="btn-sm" id="b3" disabled>Decrypt</button>
+        </div>
+        <div class="step-out" id="o3"></div>
+      </div>
+
+      <div class="step locked" id="s4">
+        <div class="step-head">
+          <div class="t"><span class="n">4</span> Tamper with one byte, then try again</div>
+          <button type="button" class="btn-sm ghost" id="b4" disabled>Tamper &amp; decrypt</button>
+        </div>
+        <div class="step-out" id="o4"></div>
+      </div>
+    </div>
+
+    <div class="demo-foot">
+      <span>AES-GCM detects any change to the data — that's why a damaged image never "half" opens.</span>
+      <button type="button" class="ghost btn-sm" id="btnReset">Start over</button>
+    </div>
+  </div>
+
+  <h2 class="section-title">How the real thing works</h2>
+  <p class="section-sub">On the live site the same steps run on the server, with an extra layer protecting the key.</p>
+  <div class="flow">
+    <div class="card"><div class="k">01 · ENCRYPT</div><h3>AES-256-GCM</h3><p>Every image gets its own random key. The stored file is unreadable ciphertext.</p></div>
+    <div class="card"><div class="k">02 · WRAP</div><h3>RSA-protected key</h3><p>That key is locked with the server's RSA key before it's saved, so a database leak alone reveals nothing.</p></div>
+    <div class="card"><div class="k">03 · SHARE</div><h3>One-time share key</h3><p>You get a secret shown once. Only its hash is stored — like a password.</p></div>
+    <div class="card"><div class="k">04 · UNLOCK</div><h3>Paste &amp; open</h3><p>The recipient pastes the key. If it matches, the image is decrypted and checked against its fingerprint.</p></div>
+  </div>
+
+  <div class="trust">
+    <strong>Worth knowing:</strong> anyone who holds the key can open the image — it works like a password-protected link, not like sharing with a specific person's account. Keep keys private, and note that a lost key can't be recovered.
+  </div>
+
+  <div class="land-foot">SecureImage · built with Flask &amp; MongoDB</div>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const hex = (u8, n) => Array.from(u8.slice(0, n)).map(b => b.toString(16).padStart(2,'0')).join('');
+  const fmt = n => n < 1024 ? n + ' bytes' : (n/1024).toFixed(1) + ' KB';
+  const hasCrypto = !!(window.crypto && window.crypto.subtle);
+
+  let imgBytes = null, imgType = 'image/png', key = null, rawKey = null, iv = null, ct = null;
+  const src = $('srcCanvas'), sctx = src.getContext('2d');
+
+  function drawSample(){
+    const g = sctx.createLinearGradient(0,0,96,96);
+    g.addColorStop(0,'#16233E'); g.addColorStop(.55,'#A9782F'); g.addColorStop(1,'#E9DCC3');
+    sctx.fillStyle = g; sctx.fillRect(0,0,96,96);
+    sctx.fillStyle = 'rgba(255,255,255,.85)'; sctx.beginPath(); sctx.arc(66,30,12,0,7); sctx.fill();
+    sctx.fillStyle = 'rgba(22,35,62,.9)';
+    sctx.beginPath(); sctx.moveTo(0,96); sctx.lineTo(34,50); sctx.lineTo(58,78); sctx.lineTo(74,60); sctx.lineTo(96,96); sctx.fill();
+  }
+
+  function loadSample(){
+    drawSample();
+    src.toBlob(async b => {
+      imgBytes = new Uint8Array(await b.arrayBuffer()); imgType = 'image/png';
+      $('srcName').textContent = 'Sample image'; $('srcSize').textContent = fmt(imgBytes.length);
+    }, 'image/png');
+  }
+
+  function lock(id, locked){
+    const s = $('s'+id); s.classList.toggle('locked', locked); $('b'+id).disabled = locked;
+  }
+  function done(id){ $('s'+id).classList.add('done'); }
+  function out(id, html){ const o = $('o'+id); o.innerHTML = html; o.classList.add('show'); }
+
+  function reset(){
+    key = rawKey = iv = ct = null;
+    for (let i = 1; i <= 4; i++){
+      $('s'+i).classList.remove('done'); $('o'+i).classList.remove('show'); $('o'+i).innerHTML = '';
+      lock(i, i !== 1);
+    }
+    $('b1').disabled = !hasCrypto;
+    if (!hasCrypto) out(1, '<span class="msg-err">This demo needs a secure (https) page with Web Crypto support.</span>');
+  }
+
+  function noise(bytes){
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d'), d = x.createImageData(64,64);
+    for (let i = 0; i < 64*64; i++){
+      d.data[i*4]   = bytes[(i*3)   % bytes.length];
+      d.data[i*4+1] = bytes[(i*3+1) % bytes.length];
+      d.data[i*4+2] = bytes[(i*3+2) % bytes.length];
+      d.data[i*4+3] = 255;
+    }
+    x.putImageData(d,0,0); return c;
+  }
+
+  function showImage(id, bytes, caption){
+    const url = URL.createObjectURL(new Blob([bytes], {type: imgType}));
+    out(id, `<div class="out-row"><img src="${url}" alt="Decrypted"><div class="cap">${caption}</div></div>`);
+  }
+
+  $('b1').onclick = async () => {
+    key = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
+    rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', key));
+    out(1, `A random 256-bit key, created just now:<div class="hex">${hex(rawKey, 32)}</div>`);
+    done(1); lock(2, false);
+  };
+
+  $('b2').onclick = async () => {
+    iv = crypto.getRandomValues(new Uint8Array(12));
+    ct = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, imgBytes));
+    out(2, `<div class="out-row"><div id="noiseHost"></div><div class="cap">The same ${fmt(imgBytes.length)} image is now ${fmt(ct.length)} of unreadable data (the extra 16 bytes are the authentication tag).<div class="hex">${hex(ct, 24)}…</div></div></div>`);
+    $('noiseHost').appendChild(noise(ct)).style.cssText = 'width:110px;height:110px;border-radius:8px;border:1px solid var(--line);image-rendering:pixelated';
+    done(2); lock(3, false);
+  };
+
+  $('b3').onclick = async () => {
+    const plain = new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct));
+    const same = plain.length === imgBytes.length && plain.every((v,i) => v === imgBytes[i]);
+    showImage(3, plain, `<span class="msg-ok">Unlocked.</span> ${same ? 'Every byte matches the original.' : 'Bytes differ — unexpected.'}`);
+    done(3); lock(4, false);
+  };
+
+  $('b4').onclick = async () => {
+    const bad = ct.slice(); bad[Math.floor(bad.length/2)] ^= 1;
+    try {
+      await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, bad);
+      out(4, 'Unexpectedly decrypted.');
+    } catch (e) {
+      out(4, `<span class="msg-err">Decryption refused.</span> Flipping a single bit of the ciphertext makes the integrity check fail, so tampered data is rejected instead of producing a corrupted picture.`);
+      done(4);
+    }
+  };
+
+  $('btnReset').onclick = reset;
+  $('btnPick').onclick = () => $('demoFile').click();
+  $('demoFile').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    if (f.size > 5*1024*1024){ alert('Please pick an image under 5 MB for the demo.'); return; }
+    imgBytes = new Uint8Array(await f.arrayBuffer()); imgType = f.type || 'image/png';
+    $('srcName').textContent = f.name; $('srcSize').textContent = fmt(imgBytes.length);
+    const url = URL.createObjectURL(f), im = new Image();
+    im.onload = () => {
+      const s = Math.max(96/im.width, 96/im.height);
+      sctx.clearRect(0,0,96,96);
+      sctx.drawImage(im, (96-im.width*s)/2, (96-im.height*s)/2, im.width*s, im.height*s);
+      URL.revokeObjectURL(url);
+    };
+    im.src = url; reset();
+  };
+
+  loadSample(); reset();
+})();
+</script>
+{% endblock %}
