@@ -1,4 +1,4 @@
-# The Vault — Key-Based Image Encryption & Sharing
+# SecureImage — Key-Based Image Encryption & Sharing
 
 A full account + MongoDB version of the image encryption project, built around
 a **key-based sharing model**: encrypting an image produces one shareable key
