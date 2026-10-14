@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: secureimage
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 2 --timeout 120 --bind 0.0.0.0:$PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: SECRET_KEY
+        generateValue: true        # Render creates a random value for you
+      - key: MONGO_URI
+        sync: false                # paste your MongoDB Atlas connection string
+      - key: SERVER_PRIVATE_KEY_PEM
+        sync: false                # output of: python generate_key.py
